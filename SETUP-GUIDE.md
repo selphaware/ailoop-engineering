@@ -15,6 +15,27 @@ before pasting; never paste the brackets themselves. In prompts especially,
 name the exact file (e.g. `dashboard.html`) — a diagnostic that makes the agent
 guess its own target proves nothing.
 
+Worked examples, stratified across three project shapes. **Each column is one
+coherent project — read downwards:**
+
+| Placeholder | ① Static dashboard | ② API + frontend | ③ Data pipeline |
+|---|---|---|---|
+| `<you>` (GitHub owner) | `usman-dev` | `acuity-analytics` | `usman-dev` |
+| `<project>` (repo + venv name) | `fx-monitor` | `sales-pipeline` | `etl-refresh` |
+| Interpreter path | `A:\envs\fx-monitor\Scripts\python.exe` | `A:\envs\sales-pipeline\Scripts\python.exe` | `A:\envs\etl-refresh\Scripts\python.exe` |
+| `<deliverable>` (gate argument) | `dashboard.html` | `app` | `output\monthly_report.csv` |
+| File to break in step 3.4 | `dashboard.html` | `app\static\index.html` | `etl\transform.py` |
+
+Note the last two rows **diverge** once the deliverable is more than one file:
+
+- **② API + frontend:** the gate's argument is the app folder (it starts the
+  server and verifies API + UI together), but the live-fire test breaks one
+  concrete file inside it.
+- **③ Data pipeline:** the gate *runs the pipeline, then checks the output* —
+  so breaking `output\monthly_report.csv` directly would prove nothing (the gate
+  regenerates it). You must break the **code that produces it**. Break the thing
+  the gate reads; for pipelines, the gate effectively reads what your code does.
+
 ---
 
 ## Files in this set

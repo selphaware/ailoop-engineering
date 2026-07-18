@@ -9,6 +9,12 @@ supporting files is called the **harness**.
 
 You build the harness once per project. After that, every task is just a spec.
 
+**Convention:** anything in `<angle brackets>` in this guide — `<project>`,
+`<deliverable>`, `<you>` — is a placeholder. Replace it with your real value
+before pasting; never paste the brackets themselves. In prompts especially,
+name the exact file (e.g. `dashboard.html`) — a diagnostic that makes the agent
+guess its own target proves nothing.
+
 ---
 
 ## Files in this set

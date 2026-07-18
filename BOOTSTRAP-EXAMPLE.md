@@ -76,8 +76,19 @@ that weighted ≠ unweighted. Without this, the gate would be useless.*
 
 **Environment:**
 > - Python interpreter: `A:\envs\pipeline\Scripts\python.exe`
+>   **(already created by me before this session — see below)**
 > - Node/npm needed? No — vanilla JS, Chart.js from CDN.
-> - Needs: `fastapi`, `uvicorn`, `playwright` (for the gate). Port 8000 free.
+> - Already installed (gate dependencies): `playwright` + Chromium
+> - You will need to install (app runtime): `fastapi`, `uvicorn` — install them
+>   into the interpreter above, not a new venv.
+> - Port 8000 must be free.
+
+*Why this is a good answer: it separates **gate dependencies** from **app
+dependencies**. The venv and Playwright must already exist before this session
+starts, because the gate self-tests itself using that interpreter — an agent
+that creates its own verification environment has nothing trustworthy to verify
+with. App runtime packages are different: the agent discovers and installs those
+as it builds, into the same venv.*
 
 ---
 
@@ -145,6 +156,12 @@ Requirements for the gate:
   use, missing dependency, wrong interpreter → say "HARNESS ERROR — this is not
   a deliverable problem" and do NOT blame the code.
 
+**Standard layout — do not deviate:** the gate lives at `verify/smoke_test.py`,
+takes the deliverable path as its argument, supports a `--selftest` flag, and
+writes any screenshots to `verify/artifacts/`. (Yes, even though this gate
+starts a server — the entrypoint stays the same so the same kickoff prompt
+works on every project.)
+
 **Then prove the gate works.** Add a `--selftest` mode that:
 - builds a known-GOOD fixture app and asserts the gate passes it
 - builds a known-BROKEN fixture (returns `[]`, and a dead filter) and asserts the
@@ -203,12 +220,20 @@ Before you tell me it is done:
 
 1. `--selftest` passes (gate discriminates good from broken, for all three
    named failure modes).
-2. The hook fires: deliberately make `/api/deals` return `[]`, confirm the hook
-   blocks the write with a useful message, then restore.
+2. The hook logic is proven **by direct invocation** — pipe a simulated
+   tool-use JSON payload into the hook script on stdin and confirm: exit 2 with
+   a useful message when the gate fails (e.g. against the empty-API fixture),
+   exit 0 when it passes, and exit 0 with a "HARNESS ERROR" message for a
+   missing dependency.
+   **Important:** the live hook CANNOT fire in this session — hooks register at
+   session start, and this harness did not exist when this session started. Do
+   not claim otherwise. State clearly in your final report that the user must
+   restart Claude Code and run the live-fire test themselves.
 3. Every absolute path in the harness has been verified to exist and run.
 4. No orphan uvicorn processes are left running after a gate run.
-5. Report: the gate command, the interpreter, the hook status, and anything you
-   discovered in Phase 0 that contradicted this brief.
+5. Report: the exact gate command the user should put in their kickoff prompt,
+   the interpreter path, the hook status (including the restart requirement
+   above), and anything you discovered in Phase 0 that contradicted this brief.
 
 Then stop. Do not build the application. I will start that in a fresh session.
 

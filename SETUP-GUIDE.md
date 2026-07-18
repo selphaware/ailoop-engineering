@@ -60,8 +60,11 @@ cd <project>
 
 **Use a local disk.** Not a mapped network drive (`R:\`), not a UNC path.
 Headless browsers behave differently on those and it wastes an afternoon.
+(No remote yet? `git init` in a new folder works the same.)
 
 ### 2.2 Create a virtual environment for this project
+
+**You create this, not Claude Code.**
 
 ```powershell
 A:\envs\py312\python.exe -m venv A:\envs\<project>
@@ -70,10 +73,17 @@ A:\envs\<project>\Scripts\python.exe -m playwright install chromium
 ```
 
 Write down the absolute path: `A:\envs\<project>\Scripts\python.exe`
+(Put the venv on a local disk too — a venv on a network share adds latency to
+every single gate run.)
 
-> Do this **before** running Claude Code. The bootstrap *discovers* your
-> environment — it can't create one. And the gate can't test itself without
-> Playwright already installed.
+**Install only the gate's dependencies now** (Playwright + Chromium). Leave the
+app's runtime packages — `fastapi`, `pandas`, whatever — for the agent to install
+into this same venv as it discovers it needs them.
+
+> Why you and not the agent: the harness pins this interpreter, and the gate
+> self-tests using it. An agent that creates its own verification environment has
+> nothing trustworthy to verify with — and when it goes wrong, it goes wrong at
+> the exact moment you have least ability to diagnose it.
 
 ### 2.3 Copy in the bootstrap
 
@@ -81,7 +91,7 @@ Copy `BOOTSTRAP-TEMPLATE.md` into the project folder as `BOOTSTRAP.md`.
 
 ### 2.4 Fill in the project section
 
-Open `BOOTSTRAP.md` and complete the five bullets at the top.
+Open `BOOTSTRAP.md` and complete the project block at the top (six fields).
 
 **Spend real time on this — 15 minutes, not 2.** Especially this line:
 
@@ -148,19 +158,28 @@ depends on this.
 
 Never trust a harness you haven't watched reject something.
 
+At this point no real deliverable exists yet, so give the gate something to fail:
+
 ```
-Deliberately break the deliverable so the gate fails.
-Make only that one edit, then stop.
+Write a deliberately broken placeholder <deliverable> — one the gate must
+fail. Make only that one write, then stop. Do not fix it.
 ```
 
-**Expected:** the write is blocked, and the gate's complaint appears *without the
-agent choosing to check*.
+**Expected:** immediately after the write, the gate's complaint appears **on its
+own** — you didn't ask for verification and the agent didn't choose to run it.
 
-**If it edits happily and moves on:** the hook is dead. Fix before continuing.
+(Note what a `PostToolUse` hook actually does: it runs *after* the write, so the
+file does get written — nothing is rolled back. Exit 2 feeds the failure straight
+back into the model. The thing you're looking for is that **automatic feedback**,
+not a prevented edit.)
 
-Then revert:
+**If the file is written and nothing appears:** the hook is dead. The usual
+suspects are bare `python` in `settings.json` or a session started before the
+harness existed. Fix before continuing.
+
+Then clean up:
 ```
-Revert that change.
+Delete the placeholder.
 ```
 
 ### 3.5 Commit the harness
@@ -190,6 +209,10 @@ python is A:\envs\<project>\Scripts\python.exe
 Read spec.md and build it. Don't stop until
 `A:\envs\<project>\Scripts\python.exe verify\smoke_test.py <deliverable>` exits 0.
 ```
+
+> The bootstrap standardises the gate at `verify\smoke_test.py`, and the
+> harness's `CLAUDE.md` states the literal gate command. If the harness's final
+> report gave a different command, use that one.
 
 Watch for the moment the gate fires on its own after a write and the agent fixes
 itself without you saying anything. **That's the loop working.**

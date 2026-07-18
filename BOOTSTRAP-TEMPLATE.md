@@ -34,8 +34,17 @@ Read this whole file before doing anything.
 
 **Environment (fill in what you already know):**
 > - Python interpreter: <absolute path, e.g. A:\envs\myproj\Scripts\python.exe>
+>   **— this venv already exists; do not create a new one**
 > - Node/npm needed? <yes/no, path if yes>
+> - Already installed (gate dependencies): <e.g. playwright + Chromium>
+> - You may install (app runtime dependencies): <e.g. fastapi, uvicorn, pandas>
+>   — install into the interpreter above, never into a new venv
 > - Anything else the project needs: <DB, env vars, ports>
+
+> **Note on the venv:** it is created by the user *before* this session, because
+> the gate self-tests using that interpreter. An agent that builds its own
+> verification environment has nothing trustworthy to verify with. App runtime
+> packages are different — install those as you discover you need them.
 
 ---
 
@@ -59,9 +68,11 @@ iterations. Establish facts first, and **write them down** in the harness.
 3. **Check the project location.** Resolve the working directory to an absolute
    path. If it is a mapped network drive or UNC path, say so — headless browsers
    and `file://` URIs behave differently there, and it is far cheaper to know now.
-4. **Hit the data source once.** Print the raw response. Note the real field
-   names, nesting, and types. If it errors, diagnose before proceeding — a 403
-   is as likely to be a missing `User-Agent` header as a firewall.
+4. **Inspect the data source once.** API: request it and print the raw response
+   — and if it errors, diagnose before proceeding (a 403 is as likely to be a
+   missing `User-Agent` header as a firewall). File: read the real header and a
+   few sample rows. Database: query the schema. Note the true field names,
+   nesting, and types. The live source is the truth, not this brief.
 5. **Report all of the above back to me before writing any files.**
 
 ---
@@ -96,6 +107,11 @@ Requirements for the gate:
 - **Distinguishes harness failure from deliverable failure.** If a dependency is
   missing or the interpreter is wrong, say "HARNESS ERROR — this is not a
   deliverable problem" and do NOT blame the code.
+
+**Standard layout — do not deviate:** the gate lives at `verify/smoke_test.py`,
+takes the deliverable path as its argument, supports a `--selftest` flag, and
+writes any screenshots to `verify/artifacts/`. A consistent layout means the
+same kickoff prompt works on every project.
 
 **Then prove the gate works.** Add a `--selftest` mode that:
 - writes a known-GOOD artifact and asserts the gate passes it
@@ -155,11 +171,19 @@ build this once the interactive loop is proven.
 Before you tell me it is done:
 
 1. `--selftest` passes (gate discriminates good from broken).
-2. The hook fires: deliberately write a broken deliverable, confirm the hook
-   blocks it with exit 2 and a useful message, then restore.
+2. The hook logic is proven **by direct invocation** — pipe a simulated
+   tool-use JSON payload into the hook script on stdin and confirm: exit 2 with
+   a useful message for a broken deliverable, exit 0 for a good one, and exit 0
+   (with a "HARNESS ERROR" message, not a code complaint) for a missing
+   dependency or interpreter.
+   **Important:** the live hook CANNOT fire in this session — hooks register at
+   session start, and this harness did not exist when this session started. Do
+   not claim otherwise. State clearly in your final report that the user must
+   restart Claude Code and run the live-fire test themselves.
 3. Every absolute path in the harness has been verified to exist and run.
-4. Report: the gate command, the interpreter, the hook status, and anything you
-   discovered in Phase 0 that contradicted this brief.
+4. Report: the exact gate command the user should put in their kickoff prompt,
+   the interpreter path, the hook status (including the restart requirement
+   above), and anything you discovered in Phase 0 that contradicted this brief.
 
 Then stop. Do not build the application. I will start that in a fresh session.
 

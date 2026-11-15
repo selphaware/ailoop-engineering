@@ -156,3 +156,13 @@ def test_unknown_stage_falls_back_to_the_strict_policy(monkeypatch):
 def test_harness_stage_may_run_only_the_drivers_read_only_checks(command, allowed):
     assert policy.check_shell(command, "harness", WIN)[0] is allowed
     assert not policy.check_shell(command, "build", WIN)[0]     # never during a build
+
+
+def test_a_virtual_environment_inside_the_project_is_never_walked(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "main.py").write_text("x = 1\n")
+    site = tmp_path / "mlprof_env" / "Lib" / "site-packages" / "pytest"
+    site.mkdir(parents=True)
+    (site / "__init__.py").write_text("import sys\n")
+    (tmp_path / "mlprof_env" / "pyvenv.cfg").write_text("home = x\n")
+    assert [rel for rel, _ in policy.iter_files(tmp_path)] == ["app/main.py"]

@@ -59,6 +59,18 @@ def merge_settings(existing: dict, ours: dict) -> dict:
     return merged
 
 
+def venv_inside(project: Path, python: str):
+    """Top-level folder of ``project`` holding the interpreter's venv, or None."""
+    try:
+        rel = Path(python).resolve().relative_to(project.resolve())
+    except (ValueError, OSError):
+        return None
+    top = rel.parts[0] if len(rel.parts) > 1 else None
+    if top and (project / top / "pyvenv.cfg").is_file():
+        return top
+    return None
+
+
 def install(project: Path, python: str, quiet: bool = False) -> list:
     """Copy the kit into ``project``. Returns a list of human-readable actions."""
     actions = []
@@ -108,7 +120,11 @@ def install(project: Path, python: str, quiet: bool = False) -> list:
 
     ignore = project / ".gitignore"
     lines = ignore.read_text(encoding="utf-8").splitlines() if ignore.exists() else []
-    missing = [g for g in GITIGNORE if g not in lines]
+    wanted = list(GITIGNORE)
+    venv = venv_inside(project, python)
+    if venv:
+        wanted.append(f"/{venv}/")              # a venv kept in the repo is never committed
+    missing = [g for g in wanted if g not in lines]
     if missing:
         ignore.write_text("\n".join(lines + missing) + "\n", encoding="utf-8")
         actions.append("updated   .gitignore")

@@ -66,7 +66,7 @@ kit, the driver, the routing and the setup steps are the same for both.
 
 ## What the kit has and has not been tested against
 
-`kit/tests` (169 tests) exercises the guard rules, the gate framework, the
+`kit/tests` (171 tests) exercises the guard rules, the gate framework, the
 three hooks and the driver end to end: routing, escalation, three strikes,
 tamper detection and restore, budgets, the red-before-build rule, slow
 checks, score bands and the determinism check.

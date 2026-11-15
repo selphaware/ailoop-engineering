@@ -323,7 +323,10 @@ def iter_files(root, include=None):
     """Yield (rel_posix, Path) for project files, skipping caches and state."""
     root = Path(root)
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIR_NAMES]
+        # Skip caches, and any virtual environment whatever it is called: a venv
+        # kept inside the project is thousands of files that are not the project.
+        dirnames[:] = [d for d in dirnames if d not in IGNORE_DIR_NAMES
+                       and not os.path.isfile(os.path.join(dirpath, d, "pyvenv.cfg"))]
         for name in filenames:
             path = Path(dirpath) / name
             rel = path.relative_to(root).as_posix()

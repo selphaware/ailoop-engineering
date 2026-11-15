@@ -406,3 +406,24 @@ def test_a_build_stopped_by_expired_sign_in_says_so_plainly(project):
     assert run.returncode == 3
     assert "OAuth session expired" in run.stdout and '"usage"' not in run.stdout
     assert project.state()["tasks"]["T1"]["attempts"] == []      # no attempt was spent
+
+
+def test_a_venv_kept_inside_the_project_is_ignored_by_git_and_by_the_driver(tmp_path):
+    import sys
+    import install_kit
+    from conftest import make_project
+    project = make_project(tmp_path)
+    env = project.root / "mlprof_env"
+    (env / "Scripts").mkdir(parents=True)
+    (env / "pyvenv.cfg").write_text("home = x\n")
+    fake_python = env / "Scripts" / "python.exe"
+    fake_python.write_text("")
+    install_kit.install(project.root, str(fake_python), quiet=True)
+    assert "/mlprof_env/" in project.read(".gitignore").splitlines()
+    install_kit.install(project.root, sys.executable, quiet=True)        # back to a real one
+    # Library code in the venv mentions pytest; that must not reach the reviewer.
+    lib = env / "Lib" / "site-packages" / "pytest"
+    lib.mkdir(parents=True)
+    (lib / "__init__.py").write_text("import os\nos.environ.get('PYTEST_CURRENT_TEST')\n")
+    assert project.drive("build", scenario=HAPPY).returncode == 0
+    assert "Judge-awareness" not in project.read("loop/state/build-report.md")

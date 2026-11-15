@@ -333,7 +333,9 @@ def run_claude(cfg, role, prompt, stage, label, accept=None, task_id="", resume=
         "rc": rc, "data": data, "cost": cost, "turns": turns, "duration": duration,
         "session_id": (data or {}).get("session_id"), "capped": capped, "infra": infra,
         "text": str((data or {}).get("result") or ""),
-        "error": checks.tail(err or raw, 1500),
+        # When Claude Code reports its own failure, its message is the useful part.
+        "error": (str(data.get("result") or "") if data and data.get("is_error") else "")
+                 or checks.tail(err or raw, 1500),
     }
 
 
@@ -1007,7 +1009,10 @@ def cmd_doctor(args) -> int:
                              f"'{cfg.get('permission_mode')}' may not be available on your "
                              "account; see MODEL-ROUTING.md, 'Permission mode'")
             else:
-                note("FAIL", f"live call returned no usable answer: {run['error'][:400]}")
+                note("FAIL", f"live call failed. Claude Code said: {run['error'][:400]}")
+                if re.search(r"authenticat|log ?in|oauth|api key", run["error"], re.I):
+                    note("info", "sign in again: run `claude auth login` (or `claude`, then "
+                                 "/login), then repeat this check")
         except HarnessProblem as exc:
             note("FAIL", str(exc))
 

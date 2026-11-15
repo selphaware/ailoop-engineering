@@ -388,3 +388,21 @@ def test_doctor_names_a_nondeterministic_gate(project):
     run = project.drive("doctor")
     assert run.returncode == 3
     assert "gate self-test: SELFTEST: FAIL" in run.stdout and "NOT DETERMINISTIC" in run.stdout
+
+
+def test_doctor_live_shows_what_claude_code_said_when_sign_in_has_expired(project):
+    expired = {"review:*:*": [{"is_error": True, "turns": 1, "cost": 0, "rc": 1,
+               "result": "Failed to authenticate: OAuth session expired and could not be refreshed"}]}
+    run = project.drive("doctor", "--live", scenario=expired)
+    assert run.returncode == 3
+    assert "Claude Code said: Failed to authenticate: OAuth session expired" in run.stdout
+    assert "claude auth login" in run.stdout
+
+
+def test_a_build_stopped_by_expired_sign_in_says_so_plainly(project):
+    expired = {"build:*:*": [{"is_error": True, "turns": 1, "cost": 0, "rc": 1,
+               "result": "Failed to authenticate: OAuth session expired and could not be refreshed"}]}
+    run = project.drive("build", scenario=expired)
+    assert run.returncode == 3
+    assert "OAuth session expired" in run.stdout and '"usage"' not in run.stdout
+    assert project.state()["tasks"]["T1"]["attempts"] == []      # no attempt was spent

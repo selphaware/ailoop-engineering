@@ -1,0 +1,7 @@
+# Python caches
+__pycache__/
+.pytest_cache/
+
+# Local virtual environment at the repo root. The leading slash matters:
+# it must not match kit/template/loop/, which is part of the kit.
+/loop/

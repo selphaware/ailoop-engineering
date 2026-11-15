@@ -2,6 +2,8 @@
 
 Build stage only. Runs the checks the current task must satisfy (exported by
 the driver in LOOP_ACCEPT), or the whole gate when no driver is in charge.
+It runs the gate's fast profile: checks marked slow are skipped here and run
+when the builder tries to finish and when the driver judges.
 
 Exit 2 + stderr  = the deliverable fails a check; the model reads the reason
                    and corrects itself before it can claim to be done.
@@ -38,8 +40,10 @@ def main() -> int:
             return 0  # nothing to judge yet
         accept = checks.read_accept()
         only = accept["gate"] if accept is not None else None
-        timeout = int(os.environ.get("LOOP_HOOK_GATE_TIMEOUT", "150"))
-        result = checks.run_gate(ROOT, plan["deliverable"], only=only, timeout=timeout)
+        timeout = int(os.environ.get("LOOP_HOOK_GATE_TIMEOUT")
+                      or checks.limit(ROOT, "hook_gate_timeout_sec", 150))
+        result = checks.run_gate(ROOT, plan["deliverable"], only=only, timeout=timeout,
+                                 fast=True)
     except Exception as exc:
         warn_human(f"HARNESS ERROR in gate hook (not a code problem): {type(exc).__name__}: {exc}")
         return 0

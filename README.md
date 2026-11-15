@@ -27,10 +27,24 @@ agent saying it has finished proves nothing.
 |---|---|
 | [`SETUP-GUIDE.md`](SETUP-GUIDE.md) | The steps, start to finish, for Windows. |
 | [`MODEL-ROUTING.md`](MODEL-ROUTING.md) | Which model does what, why, and the one file to edit when models change. |
-| [`BOOTSTRAP-TEMPLATE.md`](BOOTSTRAP-TEMPLATE.md) | The brief the harness stage follows. Fill in the top six fields per project. |
-| [`BOOTSTRAP-EXAMPLE.md`](BOOTSTRAP-EXAMPLE.md) | The template filled in for a real project, annotated. |
-| [`PROJECT-INSTRUCTIONS.md`](PROJECT-INSTRUCTIONS.md) | Instructions for a claude.ai Project that interviews you and writes the bootstrap. |
-| [`kit/`](kit/) | The fixed machinery, copied into each project by `kit/install_kit.py`. Has its own tests. |
+| [`kit/`](kit/) | The fixed machinery, copied into each project by `kit/install_kit.py`. Has its own tests. One copy, shared by both kinds of project. |
+| [`generic/`](generic/) | Briefs for applications: dashboards, APIs, pipelines, CLIs, report generators. |
+| [`ML/`](ML/) | Briefs for modelling tools: profilers, training pipelines, evaluation tools. |
+
+Each of `generic/` and `ML/` holds the same three files, and `ML/` one more:
+
+| File | What it is |
+|---|---|
+| `BOOTSTRAP-TEMPLATE.md` | The brief the harness stage follows. Fill in the project block at the top. |
+| `BOOTSTRAP-EXAMPLE.md` | The template filled in for a real project, annotated. |
+| `PROJECT-INSTRUCTIONS.md` | Instructions for a claude.ai Project that interviews you and writes the bootstrap. |
+| `ML-GATE-PATTERNS.md` (ML only) | The synthetic datasets a modelling gate is built from. |
+
+**Which one?** If the tool's output is a model, a score or a statistical
+conclusion, use `ML/`. Its brief has a methodology section, and its gate
+judges the tool on synthetic data with a known right answer, because on real
+data there is no right score to check. Everything else uses `generic/`. The
+kit, the driver, the routing and the setup steps are the same for both.
 
 ## The guardrails, in one table
 
@@ -42,6 +56,9 @@ agent saying it has finished proves nothing.
 | An agent editing its own judge | Three layers: deny rules, a guard hook on every write and shell command, and a tamper check in the driver that restores any locked file and fails the attempt |
 | An agent declaring victory | The driver re-runs the task's checks itself after every run. A `Stop` hook refuses to let a build run end while its checks fail |
 | A later task breaking an earlier one | Every earlier check is re-run on every later task |
+| A gate too slow to run on every edit | Checks marked `slow` are skipped per edit, and still run when a builder finishes and whenever the driver judges. `doctor` times the per-edit run against a budget |
+| A gate that changes its mind between runs | `--selftest` runs the known-good fixture twice and fails if the verdict or any measured value differs |
+| A plausible, wrong model score | Synthetic ground truth: planted signal must be found, pure noise must show none, a leaked column must be flagged (`ML/ML-GATE-PATTERNS.md`) |
 | Thrashing on an impossible task | Fixed attempts per tier, then a hard stop and a read-only diagnosis. No agent rewrites the spec, gate or tests unattended |
 | Passing the checks but missing the point | A read-only review on the strongest model, then you |
 | A runaway bill | Turn, time and spend caps per run, and a total budget |
@@ -49,9 +66,10 @@ agent saying it has finished proves nothing.
 
 ## What the kit has and has not been tested against
 
-`kit/tests` (156 tests) exercises the guard rules, the gate framework, the
+`kit/tests` (167 tests) exercises the guard rules, the gate framework, the
 three hooks and the driver end to end: routing, escalation, three strikes,
-tamper detection and restore, budgets, the red-before-build rule.
+tamper detection and restore, budgets, the red-before-build rule, slow
+checks, score bands and the determinism check.
 
 Those tests drive a **stand-in** for the `claude` command. They prove the
 loop's own logic. They do not prove that your installed Claude Code accepts
@@ -82,6 +100,13 @@ guide cover that, and none is optional the first time:
 - Corrected: hooks no longer need a session restart to register (settings
   are normally picked up live), though a fresh session per stage is still
   how the loop runs.
+
+Added since:
+
+- Briefs split into `generic/` and `ML/`, over one shared kit.
+- Slow checks and a per-edit fast profile, score bands, a determinism check
+  in the self-test, and gate timing in `doctor`.
+- A runnable example gate for a modelling tool.
 
 ## Requirements
 

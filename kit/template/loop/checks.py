@@ -97,8 +97,11 @@ def gate_list(root, python=None, timeout=60):
     return {c["id"]: c for c in data["checks"]}, ""
 
 
-def run_gate(root, deliverable, only=None, python=None, timeout=300) -> Result:
-    """Run the gate. ``only`` is a list of check ids, or None for all of them."""
+def run_gate(root, deliverable, only=None, python=None, timeout=300, fast=False) -> Result:
+    """Run the gate. ``only`` is a list of check ids, or None for all of them.
+
+    ``fast`` leaves out the checks the gate marks slow (the per-edit profile).
+    """
     python = python or sys.executable
     root = Path(root)
     if not (root / GATE_SCRIPT).is_file():
@@ -108,6 +111,8 @@ def run_gate(root, deliverable, only=None, python=None, timeout=300) -> Result:
     cmd = [python, GATE_SCRIPT, str(deliverable), "--json"]
     if only:
         cmd += ["--only", ",".join(only)]
+    if fast:
+        cmd.append("--fast")
     rc, out = _run(cmd, root, timeout)
     data = _last_json_line(out)
     if rc is None:
@@ -190,6 +195,15 @@ def _read_junit(xml_path):
         else:
             passed.append(test_id)
     return passed, failing, skipped
+
+
+def limit(root, name, default):
+    """A value from limits in loop/loop.json, or ``default`` if it cannot be read."""
+    try:
+        cfg = json.loads((Path(root) / "loop" / "loop.json").read_text(encoding="utf-8"))
+        return cfg.get("limits", {}).get(name, default)
+    except (OSError, ValueError, AttributeError):
+        return default
 
 
 def read_accept():

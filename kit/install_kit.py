@@ -9,7 +9,7 @@ That is deliberate: the gate, the tests, the hooks and the driver must all
 use the same interpreter, and it must be one YOU created.
 
 Safe to re-run. It overwrites kit files only (hooks, driver, gatekit,
-prompts, scout agent, tests/pytest.ini), merges its hooks and deny rules into
+prompts, reference examples, scout agent, tests/pytest.ini), merges its hooks and deny rules into
 an existing .claude/settings.json (keeping a .bak), and never touches your
 gate, spec, plan, tests or application. loop/loop.json is kept if it exists,
 because it holds your routing choices.
@@ -78,6 +78,16 @@ def install(project: Path, python: str, quiet: bool = False) -> list:
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
         actions.append(f"{verb} {rel.as_posix()}")
+
+    examples = TEMPLATE.parent / "examples"
+    for src in sorted(examples.glob("*")) if examples.is_dir() else []:
+        if src.is_file():                       # reference gates and plan, read-only
+            dest = project / "loop" / "examples" / src.name
+            if not dest.exists() or dest.read_bytes() != src.read_bytes():
+                verb = "updated  " if dest.exists() else "installed"
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, dest)
+                actions.append(f"{verb} loop/examples/{src.name}")
 
     settings_path = project / ".claude" / "settings.json"
     ours = render_settings(python)

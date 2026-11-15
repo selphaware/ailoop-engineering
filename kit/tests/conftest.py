@@ -170,3 +170,38 @@ def project(tmp_path):
 def bare_project(tmp_path):
     """Kit, gate and plan in place, but no test suite yet."""
     return make_project(tmp_path, with_tests=False)
+
+
+ML_PLAN = {
+    "version": 1, "deliverable": "app",
+    "tasks": [{
+        "id": "T1", "title": "Profiler", "tier": "complex", "depends_on": [],
+        "writes": ["app/profiler.py"], "brief": "Implement profile() per spec.md.",
+        "gate_checks": ["rows.reconcile", "signal.detected", "leak.flagged", "noise.no_signal"],
+        "tests": [],
+    }],
+}
+
+
+def ml_sources():
+    """GOOD and BROKEN profiler sources from the ML example gate."""
+    import importlib.util
+    sys.path.insert(0, str(KIT / "template" / "verify"))
+    spec = importlib.util.spec_from_file_location(
+        "ml_example_gate", KIT / "examples" / "smoke_test.ml.example.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.GOOD, module.BROKEN
+
+
+@pytest.fixture
+def ml_project(tmp_path):
+    """Kit plus the ML example gate: one slow check, score bands, seeded data."""
+    root = tmp_path / "proj"
+    install_kit.install(root, sys.executable, quiet=True)
+    proj = Project(root)
+    shutil.copyfile(KIT / "examples" / "smoke_test.ml.example.py", root / "verify" / "smoke_test.py")
+    proj.write("plan/tasks.json", json.dumps(ML_PLAN))
+    for name in ("spec.md", "CLAUDE.md", "BOOTSTRAP.md"):
+        proj.write(name, "# x\n")
+    return proj

@@ -31,13 +31,14 @@ project's interpreter, e.g. `A:\envs\fx-monitor\Scripts\python.exe`.
 Worked examples, stratified across three project shapes. **Each column is one
 coherent project — read downwards:**
 
-| Placeholder | ① Static dashboard | ② API + frontend | ③ Data pipeline |
-|---|---|---|---|
-| `<you>` (GitHub owner) | `usman-dev` | `acuity-analytics` | `usman-dev` |
-| `<project>` (repo + venv name) | `fx-monitor` | `sales-pipeline` | `etl-refresh` |
-| `<py>` | `A:\envs\fx-monitor\Scripts\python.exe` | `A:\envs\sales-pipeline\Scripts\python.exe` | `A:\envs\etl-refresh\Scripts\python.exe` |
-| `<deliverable>` (gate argument) | `dashboard.html` | `app` | `output\monthly_report.csv` |
-| File to break in step 3.4 | `dashboard.html` | `app\static\index.html` | `etl\transform.py` |
+| Placeholder | ① Static dashboard | ② API + frontend | ③ Data pipeline | ④ Modelling tool |
+|---|---|---|---|---|
+| `<you>` (GitHub owner) | `usman-dev` | `acuity-analytics` | `usman-dev` | `usman-dev` |
+| `<project>` (repo + venv name) | `fx-monitor` | `sales-pipeline` | `etl-refresh` | `churn-profiler` |
+| `<py>` | `A:\envs\fx-monitor\Scripts\python.exe` | `A:\envs\sales-pipeline\Scripts\python.exe` | `A:\envs\etl-refresh\Scripts\python.exe` | `A:\envs\churn-profiler\Scripts\python.exe` |
+| Brief template | `generic\` | `generic\` | `generic\` | `ML\` |
+| `<deliverable>` (gate argument) | `dashboard.html` | `app` | `output\monthly_report.csv` | `app` |
+| File to break in step 3.4 | `dashboard.html` | `app\static\index.html` | `etl\transform.py` | `app\model.py` |
 
 Note the last two rows **diverge** once the deliverable is more than one file:
 
@@ -48,6 +49,8 @@ Note the last two rows **diverge** once the deliverable is more than one file:
   so breaking `output\monthly_report.csv` directly would prove nothing (the gate
   regenerates it). You must break the **code that produces it**. Break the thing
   the gate reads; for pipelines, the gate effectively reads what your code does.
+- **④ Modelling tool:** the gate runs the tool on synthetic data it generates
+  itself, so there is no data file to break either. Break the modelling code.
 
 ---
 
@@ -57,10 +60,16 @@ Note the last two rows **diverge** once the deliverable is more than one file:
 |---|---|
 | `SETUP-GUIDE.md` | This file. The steps. |
 | `MODEL-ROUTING.md` | Which model does what, why, and the one file to edit when models change. |
-| `BOOTSTRAP-TEMPLATE.md` | Copy into a new project, fill in the top, hand to the harness stage. |
-| `BOOTSTRAP-EXAMPLE.md` | The template filled in for a real project, so you can see what "good" looks like. |
-| `PROJECT-INSTRUCTIONS.md` | Instructions for the claude.ai Project that interviews you and writes the bootstrap. |
-| `kit/` | The fixed, tested machinery: hooks, driver, gate framework, installer. Copied into each project. |
+| `kit/` | The fixed, tested machinery: hooks, driver, gate framework, installer. Copied into each project. Shared by both kinds of project. |
+| `generic/BOOTSTRAP-TEMPLATE.md` | The brief for an application. Copy into a new project, fill in the top, hand to the harness stage. |
+| `generic/BOOTSTRAP-EXAMPLE.md` | That template filled in for a real project, so you can see what "good" looks like. |
+| `generic/PROJECT-INSTRUCTIONS.md` | Instructions for the claude.ai Project that interviews you and writes the bootstrap. |
+| `ML/` | The same three files for modelling tools, plus `ML-GATE-PATTERNS.md`. |
+
+**Generic or ML?** If the tool's output is a model, a score or a statistical
+conclusion (a profiler, a training pipeline, an evaluation tool), use the
+`ML/` files. Otherwise use `generic/`. Every step in this guide is the same
+for both; where an ML project differs, the step says so.
 
 ---
 
@@ -172,8 +181,9 @@ folders to `.gitignore`. It is safe to re-run after you update the kit.
 ### 2.4 Write the bootstrap
 
 Either let the claude.ai Project interview you and produce `BOOTSTRAP.md`, or
-copy `BOOTSTRAP-TEMPLATE.md` into the project folder as `BOOTSTRAP.md` and
-complete the project block at the top (six fields).
+copy the template into the project folder as `BOOTSTRAP.md` and complete the
+project block at the top: `generic\BOOTSTRAP-TEMPLATE.md` (six fields) for an
+application, `ML\BOOTSTRAP-TEMPLATE.md` (seven fields) for a modelling tool.
 
 **Spend real time on this — 15 minutes, not 2.** Especially these lines:
 
@@ -181,7 +191,13 @@ complete the project block at the top (six fields).
 
 Those sentences become your gate, your regression tests and the reviewer's
 checklist. They are the single highest-leverage thing you write. Number them
-F1, F2, F3. See `BOOTSTRAP-EXAMPLE.md` for how specific to be.
+F1, F2, F3. See the `BOOTSTRAP-EXAMPLE.md` beside your template for how
+specific to be.
+
+For a modelling tool, give the **methodology** field the same care: what the
+headline number is, against which baseline, under which validation scheme.
+The gate can prove the tool is not leaking or miscounting. It cannot decide
+what "predictable" should mean. That is your call, and it is made here.
 
 ### 2.5 Commit, then check
 
@@ -237,6 +253,15 @@ Ten minutes here saves hours later. Check three things:
 3. **The interface contract in `spec.md`.** The test author will write tests
    from it without seeing any code. If you could not, neither can it.
 
+For a modelling tool, two more:
+
+4. **The bands.** The harness report should show, for every score check, the
+   range measured over several seeds for the good reference implementation
+   and for each broken one. A wide gap between them is what you want. A band
+   with no measurements behind it is a guess.
+5. **The methodology in `spec.md`** matches what you wrote in the brief, and
+   the report lists anywhere the data argued against it.
+
 To change anything, reopen a harness session with the judge unlocked:
 
 ```powershell
@@ -258,6 +283,11 @@ You should see a `PreToolUse`, a `PostToolUse` and a `Stop` hook, each using
 the **absolute interpreter path** (`A:\envs\...\python.exe`), not bare
 `python`. If one is missing or shows bare `python`, stop and re-run the
 installer. Everything downstream depends on this.
+
+`doctor` also runs the gate's self-test and reports two things worth reading:
+a timing line (how long the gate takes on each edit, against a budget) and,
+if the gate gave different results on two identical runs, a `NOT
+DETERMINISTIC` failure. Fix either through `harness --open` before going on.
 
 ### 3.4 Prove the hooks actually fire ⚠️
 
@@ -371,7 +401,9 @@ differently under test, failure modes nobody named. The report lands in
 
 The gate proved it runs and the data landed. The tests proved the contract.
 The review looked for cheating and gaps. Your job is whether it's the *right*
-chart, the right story, the sensible axis.
+chart, the right story, the sensible axis. For a modelling tool: whether the
+number means what the report says it means, and whether a score on your real
+data is believable. Nothing in the loop has an opinion on that.
 
 **If it's wrong, fix the judge, not the output.** Open
 `run_loop.py harness --open`, have Fable turn the problem into a sharper spec,
@@ -455,6 +487,10 @@ git state, to check the baseline is committed.
 | Unattended run ends at once with a sign-in or consent message | Not signed in, or Fable consent not given | `claude` interactively once; `/model fable` (1.3) |
 | Driver says `HARNESS ERROR` and names a flag | Claude Code older than the kit expects | `claude update` |
 | `STOPPED ... uncommitted changes` | Gate, plan, spec or kit edited since the last commit | Commit, or `--allow-dirty` if you mean it |
+| `doctor`: `NOT DETERMINISTIC` | The gate gave different results on two identical runs: an unpinned seed, parallel fitting, or a dependence on the clock | Pin seeds, run single-threaded in the gate, via `harness --open` |
+| `doctor`: "the gate takes Ns on every edit" | The per-edit gate run is over budget | Mark heavy checks `slow=True`, shrink the fast profile, or raise `limits.hook_gate_budget_sec` if you accept the wait |
+| A builder passes every edit, then fails when it tries to finish | A slow check, which only runs at that point, is failing | Expected. The failure message names the check |
+| Build log: "there is no test suite" | The plan names no test files, so the gate is the only judge | Fine for a small project; otherwise add tests to the plan |
 | `TAMPER detected and undone` once | An agent tried to edit the judge; the driver restored it | Nothing — that is the system working. Note which task |
 | "running the checks changed locked files" on every run | A test or the app writes into `tests\` or `verify\` at run time | Tests write to `tmp_path`; the gate to `verify\artifacts\`; the app nowhere near its inputs |
 | Guard blocks a harmless command | The shell guard is a heuristic and erred on the safe side | Rephrase (e.g. use the Read tool); if it recurs, note the command |

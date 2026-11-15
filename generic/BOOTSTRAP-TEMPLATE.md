@@ -90,6 +90,7 @@ writing against; never modify them (the guard will block you).
 | `.claude/settings.json` | Registers the three hooks with the absolute interpreter path. |
 | `loop/run_loop.py` | The driver. Runs each later stage on its model, re-judges every run itself, escalates, and stops for the human after three strikes. |
 | `loop/loop.json` | Tier → model routing and limits. |
+| `loop/examples/smoke_test.example.py` | A complete small gate, for reference. Read it before writing yours. |
 | `tests/pytest.ini` | Pins the test run so app code cannot reconfigure it. |
 
 In this session the guard is live with the **harness** policy: you may write
@@ -154,7 +155,11 @@ Requirements for the gate:
 - **Specific failure messages.** Not "verification failed" but "0 populated KPI
   values (need >= 3) — check `.kpi-card .kpi-value` is non-empty". The message is
   fed back to the builder; a vague message costs an iteration.
-- **Fast.** It runs on every edit. Seconds, not minutes.
+- **Fast.** It runs on every edit. Seconds, not minutes. A check that cannot
+  be made fast is marked `slow=True`: it is skipped on each edit and still run
+  when a builder finishes and whenever the driver judges.
+- **Deterministic.** `--selftest` runs the good fixture twice and fails if the
+  verdict or any recorded value differs.
 - **Thresholds derived from the real data**, not invented. If the source only
   supports 2 metrics, a gate demanding 3 can never pass and the builder will
   thrash forever inventing filler. Check the actual data before setting numbers.
@@ -172,7 +177,7 @@ Requirements for the gate:
 
 **Standard layout — do not deviate:** the gate lives at `verify/smoke_test.py`,
 takes the deliverable path as its argument, supports `--selftest`, `--list`,
-`--only` and `--json` (gatekit provides all four), and writes any screenshots
+`--only`, `--fast` and `--json` (gatekit provides all five), and writes any screenshots
 to `verify/artifacts/`. A consistent layout means the same driver and hooks
 work on every project.
 

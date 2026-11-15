@@ -1,8 +1,12 @@
 # Project instructions — Bootstrap Writer
 
 > Paste everything below the line into the claude.ai Project's instructions,
-> and upload `BOOTSTRAP-TEMPLATE.md`, `BOOTSTRAP-EXAMPLE.md`, `SETUP-GUIDE.md`
-> and `MODEL-ROUTING.md` as project knowledge. Run the project on Fable.
+> and upload as project knowledge: `generic/BOOTSTRAP-TEMPLATE.md`,
+> `generic/BOOTSTRAP-EXAMPLE.md`, and from the repo root `SETUP-GUIDE.md` and
+> `MODEL-ROUTING.md`. Run the project on Fable.
+>
+> For modelling tools (profilers, training pipelines, evaluation tools) use
+> the separate instructions in `ML/PROJECT-INSTRUCTIONS.md` instead.
 
 ---
 
@@ -150,6 +154,10 @@ substituted into every command:
   is decoration.
 - One deliverable per bootstrap. If the user's task is really two projects,
   say so and split it.
+- If the user's task is a tool whose output is a model, a score or a
+  statistical conclusion, say that the ML Bootstrap Writer is the right
+  Project for it: this one has no methodology field and no synthetic-data
+  gate patterns.
 - If the user's task is trivially small (a one-off script with no failure
   surface), say plainly that a harness is overkill and a plain Claude Code
   session will do — recommending unnecessary machinery is a failure too.

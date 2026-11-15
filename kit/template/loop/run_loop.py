@@ -396,7 +396,9 @@ def build_prompt(plan, task, tier, role, accept, gate_docs, failure=None) -> str
     lines += ["## Done means"]
     if own_gate:
         lines += ["Gate checks that must pass:"]
-        lines += [f"- `{c}`: {gate_docs.get(c, {}).get('doc', '')}" for c in own_gate]
+        lines += [f"- `{c}`: {gate_docs.get(c, {}).get('doc', '')}"
+                  + (" (slow: not run on each edit, run when you finish)"
+                     if gate_docs.get(c, {}).get("slow") else "") for c in own_gate]
         lines += [f"\nRun: `{py()} verify/smoke_test.py {plan['deliverable']} "
                   f"--only {','.join(own_gate)}`"]
     if own_tests:
@@ -559,6 +561,11 @@ def reverify_done(cfg, plan, state) -> None:
     save_state(state)
 
 
+def has_test_suite() -> bool:
+    tests = ROOT / "tests"
+    return any(tests.glob("**/test_*.py")) or any(tests.glob("**/*_test.py"))
+
+
 def judge_awareness() -> list:
     hits = []
     for rel, path in policy.iter_files(ROOT, lambda r: policy.classify(r) == "app"):
@@ -575,8 +582,10 @@ def judge_awareness() -> list:
 
 
 def write_build_report(plan, state, final_ok, warnings) -> Path:
+    judged_by = "full gate + full suite" if state.get("has_test_suite", True) else \
+        "full gate ONLY: this project has no test suite"
     rows = ["# Build report", "",
-            f"Result: {'PASS' if final_ok else 'NOT PASSING'} (full gate + full suite)",
+            f"Result: {'PASS' if final_ok else 'NOT PASSING'} ({judged_by})",
             f"Estimated spend so far: ${state.get('spent_usd', 0.0):.2f}", "",
             "| Task | Planned tier | Passed on | Attempts | Est. cost | Minutes |",
             "|---|---|---|---|---|---|"]
@@ -664,8 +673,15 @@ def _build(cfg, plan, order, state, gate_docs, snapshot) -> int:
         log(f"Task {task['id']} [{task['tier']}]: {task.get('title', '')}")
         run_task(cfg, plan, task, state, gate_docs, snapshot)
 
-    log("All tasks passed. Running the full gate and the full suite.")
-    gate, tests = judge(cfg, plan, {"gate": None, "tests": None})
+    # A project may be judged by its gate alone. Say so loudly rather than fail on
+    # an empty tests/ folder, and never treat "no suite" as "suite passed" silently.
+    suite = None if has_test_suite() else []
+    if suite is None:
+        log("All tasks passed. Running the full gate and the full suite.")
+    else:
+        log("All tasks passed. Running the full gate. NOTE: there is no test suite; "
+            "the gate is the only judge of this build.")
+    gate, tests = judge(cfg, plan, {"gate": None, "tests": suite})
     if not (gate.ok and tests.ok):
         log("Full verification is not passing; running an integration task.")
         integration = {
@@ -675,13 +691,15 @@ def _build(cfg, plan, order, state, gate_docs, snapshot) -> int:
                       "and test suite do not pass together. Find out why and fix the "
                       "application so everything passes at once.\n\n" +
                       describe_failure(gate, tests, [], {})),
-            "gate_checks": sorted(gate_docs), "tests": ["tests"],
+            "gate_checks": sorted(gate_docs), "tests": ["tests"] if suite is None else [],
         }
         state["tasks"].pop("INTEGRATION", None)
         run_task(cfg, plan, integration, state, gate_docs, snapshot)
-        gate, tests = judge(cfg, plan, {"gate": None, "tests": None})
+        gate, tests = judge(cfg, plan, {"gate": None, "tests": suite})
     final_ok = gate.ok and tests.ok
     state["build_passed"] = final_ok
+    save_state(state)
+    state["has_test_suite"] = suite is None
     save_state(state)
     report = write_build_report(plan, state, final_ok, judge_awareness())
     log(f"Build {'PASSED' if final_ok else 'did NOT pass'}. Report: {report.relative_to(ROOT)}")
@@ -938,8 +956,23 @@ def cmd_doctor(args) -> int:
             note("ok", f"gate lists {len(gate_ids)} check(s)")
             st = subprocess.run([exe, checks.GATE_SCRIPT, "--selftest"], cwd=ROOT,
                                 capture_output=True, text=True)
-            last = (st.stdout.strip().splitlines() or ["(no output)"])[-1]
-            note("ok" if st.returncode == 0 else "FAIL", f"gate self-test: {last}")
+            lines = st.stdout.strip().splitlines() or ["(no output)"]
+            note("ok" if st.returncode == 0 else "FAIL", f"gate self-test: {lines[-1]}")
+            for line in lines:
+                if line.startswith("SELFTEST DEFECT") and "NOT DETERMINISTIC" in line:
+                    note("FAIL", line[len("SELFTEST DEFECT: "):])
+            timing = re.search(r"TIMING: full gate ([\d.]+)s, per-edit \(--fast\) ([\d.]+)s",
+                               st.stdout)
+            if timing and cfg:
+                full, fast = float(timing.group(1)), float(timing.group(2))
+                budget = cfg["limits"].get("hook_gate_budget_sec", 20)
+                if fast > budget:
+                    note("WARN", f"the gate takes {fast:.0f}s on every edit (budget {budget}s). "
+                                 "Mark heavy checks slow=True or shrink the fast profile")
+                else:
+                    note("ok", f"gate timing: {fast:.1f}s per edit, {full:.1f}s in full")
+                if full > cfg["limits"].get("gate_timeout_sec", 300):
+                    note("FAIL", f"the full gate takes {full:.0f}s, over limits.gate_timeout_sec")
             plan, errors, warnings = load_plan(gate_ids)
             for e in errors:
                 note("FAIL", f"plan: {e}")

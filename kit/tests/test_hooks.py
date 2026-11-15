@@ -123,3 +123,31 @@ def test_stop_hook_allows_stopping_when_everything_passes(project):
     project.write("app/__init__.py", "")
     project.write("app/report.py", GOOD)
     assert project.hook("stop_gate.py", STOP, LOOP_STAGE="build").returncode == 0
+
+
+# ------------------------------------------------------------ slow checks --
+
+def test_per_edit_hook_skips_slow_checks_but_the_stop_hook_runs_them(ml_project):
+    from conftest import ml_sources
+    _, broken = ml_sources()
+    ml_project.write("app/profiler.py", broken["F1"])       # visible only to the slow check
+    per_edit = ml_project.hook("gate_hook.py", EDIT)
+    assert per_edit.returncode == 0                          # fast profile: nothing to report
+    at_stop = ml_project.hook("stop_gate.py", STOP, LOOP_STAGE="build")
+    assert at_stop.returncode == 2 and "noise.no_signal" in at_stop.stderr
+
+
+def test_per_edit_hook_still_reports_fast_failures(ml_project):
+    from conftest import ml_sources
+    _, broken = ml_sources()
+    ml_project.write("app/profiler.py", broken["F4"])
+    run = ml_project.hook("gate_hook.py", EDIT)
+    assert run.returncode == 2 and "signal.detected" in run.stderr
+    assert "SKIP noise.no_signal" in run.stderr
+
+
+def test_hook_timeout_comes_from_loop_json(ml_project):
+    import checks
+    assert checks.limit(ml_project.root, "hook_gate_timeout_sec", 1) == 150
+    assert checks.limit(ml_project.root, "no_such_limit", 7) == 7
+    assert checks.limit(ml_project.root / "nowhere", "hook_gate_timeout_sec", 9) == 9

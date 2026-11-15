@@ -83,3 +83,72 @@ def test_a_check_must_say_what_it_catches(project):
         '@gate.check("load.rows", catches=["F1"],', '@gate.check("load.rows",'))
     run = project.gate("--list")
     assert run.returncode != 0 and "names no failure mode" in run.stderr
+
+
+# ------------------------------------- slow checks, bands and determinism --
+
+def test_ml_example_gate_discriminates_and_reports_timing(ml_project):
+    run = ml_project.gate("--selftest")
+    assert run.returncode == 0, run.stdout + run.stderr
+    for mode, check in (("F1", "noise.no_signal"), ("F2", "leak.flagged"),
+                        ("F3", "rows.reconcile"), ("F4", "signal.detected")):
+        assert f"{mode} caught by {check}" in run.stdout
+    assert "TIMING: full gate" in run.stdout and "1 slow check(s) skipped per edit" in run.stdout
+    assert "passes twice with identical results" in run.stdout
+    listed = last_json(ml_project.gate("--list", "--json").stdout)
+    assert [c["id"] for c in listed["checks"] if c["slow"]] == ["noise.no_signal"]
+
+
+def test_fast_profile_skips_slow_checks_and_the_full_run_does_not(ml_project):
+    from conftest import ml_sources
+    _, broken = ml_sources()
+    ml_project.write("app/profiler.py", broken["F1"])       # only the slow check can see F1
+    full = ml_project.gate("app", "--json")
+    assert full.returncode == 1
+    assert [c["id"] for c in last_json(full.stdout)["checks"] if not c["ok"]] == ["noise.no_signal"]
+    assert "expected between -0.2 and 0.2" in full.stdout   # a band, with the measured value
+    fast = ml_project.gate("app", "--fast", "--json")
+    assert fast.returncode == 0 and "SKIP noise.no_signal" in fast.stdout
+    assert last_json(fast.stdout)["skipped_slow"] == ["noise.no_signal"]
+    only_slow = ml_project.gate("app", "--fast", "--only", "noise.no_signal")
+    assert only_slow.returncode == 0 and "GATE: PASS (0 checks)" in only_slow.stdout
+
+
+def test_checks_report_how_long_they_took(ml_project):
+    from conftest import ml_sources
+    ml_project.write("app/profiler.py", ml_sources()[0])
+    data = last_json(ml_project.gate("app", "--json").stdout)
+    assert all(isinstance(c["seconds"], float) for c in data["checks"])
+
+
+def test_selftest_catches_a_gate_whose_measurements_drift(project):
+    src = project.read("verify/smoke_test.py").replace(
+        "    rows = ctx.state[\"report\"].load(ctx.state[\"data_path\"])\n    want = len(",
+        "    import random\n    ctx.record(\"unseeded score\", random.random())\n"
+        "    rows = ctx.state[\"report\"].load(ctx.state[\"data_path\"])\n    want = len(")
+    assert "unseeded score" in src
+    project.write("verify/smoke_test.py", src)
+    run = project.gate("--selftest")
+    assert run.returncode == 1
+    assert "NOT DETERMINISTIC" in run.stdout and "unseeded score" in run.stdout
+    assert "Pin every seed" in run.stdout
+
+
+def test_selftest_catches_a_gate_that_changes_its_verdict(project):
+    flaky = '''
+
+@gate.check("flaky.check", why="demonstration", doc="fails every other run")
+def flaky_check(ctx):
+    marker = ctx.artifacts / "flaky.count"
+    ctx.artifacts.mkdir(parents=True, exist_ok=True)
+    n = int(marker.read_text()) if marker.exists() else 0
+    marker.write_text(str(n + 1))
+    ctx.require(n % 2 == 0, "odd run")
+'''
+    src = project.read("verify/smoke_test.py").replace(
+        "# ------------------------------------------------------------- fixtures --",
+        flaky + "\n# fixtures")
+    assert "flaky.check" in src
+    project.write("verify/smoke_test.py", src)
+    run = project.gate("--selftest")
+    assert run.returncode == 1 and "failed different checks" in run.stdout

@@ -48,6 +48,13 @@ The harness stage assigns a tier to every task. The rule it follows:
 | `routine` | `sonnet` | One concern, a clear contract in the spec, an obvious pattern to follow. |
 | `support` | `haiku` | One obvious right answer. |
 
+For a modelling tool, "subtly wrong" has a precise meaning: anything that
+decides **which rows a number is computed on** is `complex`. That covers
+splitting, validation, fitting any preprocessing, metric and baseline
+computation, model selection, leakage detection and joins. Adding another
+model family or report section behind an interface that already exists is
+`routine`.
+
 When torn between two tiers the planner picks the lower, because escalation
 is automatic and cheap. The exception is a task that carries a named failure:
 it starts at `complex`.

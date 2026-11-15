@@ -131,6 +131,7 @@ writing against; never modify them (the guard will block you).
 | `.claude/settings.json` | Registers the three hooks with the absolute interpreter path. |
 | `loop/run_loop.py` | The driver. Runs each later stage on its model, re-judges every run itself, escalates, and stops for the human after three strikes. |
 | `loop/loop.json` | Tier → model routing and limits. |
+| `loop/examples/smoke_test.example.py` | A complete small gate, for reference. Read it before writing yours. |
 | `tests/pytest.ini` | Pins the test run so app code cannot reconfigure it. |
 
 In this session the guard is live with the **harness** policy: you may write

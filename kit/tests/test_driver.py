@@ -348,3 +348,43 @@ def test_tests_added_after_a_build_may_pass_immediately(project):
     run = project.drive("tests", scenario={"tests:*:*": [{"write": {"tests/test_count.py": new_test}}]})
     assert run.returncode == 0, run.stdout
     assert "test_load_still_works" in project.read("loop/state/tests-report.md")
+
+
+# ------------------------------------------------- slow checks and timing --
+
+def test_the_driver_judges_slow_checks_the_per_edit_hook_skipped(ml_project):
+    from conftest import ml_sources
+    good, broken = ml_sources()
+    scenario = {"build:T1:opus": [{"write": {"app/profiler.py": broken["F1"]}},
+                                  {"write": {"app/profiler.py": good}}]}
+    run = ml_project.drive("build", scenario=scenario)
+    assert run.returncode == 0, run.stdout
+    attempts = ml_project.state()["tasks"]["T1"]["attempts"]
+    assert [a["passed"] for a in attempts] == [False, True]
+    assert attempts[0]["signature"] == "gate:noise.no_signal|tests:"
+    prompt = ml_project.calls()[0]["prompt"]
+    assert "`noise.no_signal`" in prompt and "(slow: not run on each edit" in prompt
+    assert "lift on the pure-noise data" in ml_project.calls()[1]["prompt"]
+    # No tests/ in this project: the build says so instead of failing or staying quiet.
+    assert "there is no test suite" in run.stdout
+    assert "full gate ONLY" in ml_project.read("loop/state/build-report.md")
+
+
+def test_doctor_reports_gate_timing_and_warns_when_the_per_edit_run_is_too_slow(ml_project):
+    run = ml_project.drive("doctor")
+    assert "gate timing:" in run.stdout and "per edit" in run.stdout
+    cfg = json.loads(ml_project.read("loop/loop.json"))
+    cfg["limits"]["hook_gate_budget_sec"] = -1
+    ml_project.write("loop/loop.json", json.dumps(cfg))
+    run = ml_project.drive("doctor")
+    assert "on every edit (budget -1s)" in run.stdout and "slow=True" in run.stdout
+
+
+def test_doctor_names_a_nondeterministic_gate(project):
+    project.write("verify/smoke_test.py", project.read("verify/smoke_test.py").replace(
+        "    want = len(ctx.state[\"source\"])\n    ctx.require(len(rows) == want,",
+        "    import random\n    ctx.record(\"unseeded\", random.random())\n"
+        "    want = len(ctx.state[\"source\"])\n    ctx.require(len(rows) == want,"))
+    run = project.drive("doctor")
+    assert run.returncode == 3
+    assert "gate self-test: SELFTEST: FAIL" in run.stdout and "NOT DETERMINISTIC" in run.stdout
